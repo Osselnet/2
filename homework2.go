@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
-	"log"
 )
+
 var actions = []string{"logged in", "logged out", "created record", "deleted record", "updated account"}
 
 type logItem struct {
@@ -35,29 +37,29 @@ func main() {
 
 	startTime := time.Now()
 
-	const jobsCount, workwerCount = 100, 5
+	const jobsCount, workerCount = 100, 50
 	jobs := make(chan int, jobsCount)
-	users := make(chan User, jobsCount)
 
-	for i := 0; i < workwerCount; i++ {
-		go worker(jobs, users)
+	w := &sync.WaitGroup{}
+
+	for i := 0; i < workerCount; i++ {
+		go worker(w, jobs)
 	}
 
-	for i := 0; i < jobsCount; i++ {
-		jobs <- i + 1
+	for j := 0; j < jobsCount; j++ {
+		w.Add(1)
+		jobs <- j + 1
 	}
-	close(jobs)
 
-	for user := range users {
-		saveUserInfo(user)
-	}
+	w.Wait()
 
 	fmt.Printf("DONE! Time Elapsed: %.2f seconds\n", time.Since(startTime).Seconds())
 }
 
-func worker(jobs <-chan int, users chan<- User){
-	for range jobs {
-		users <- generateUser(<-jobs)
+func worker(w *sync.WaitGroup, jobs <-chan int) {
+	for i := range jobs {
+		saveUserInfo(generateUser(i))
+		w.Done()
 	}
 }
 
@@ -74,31 +76,15 @@ func saveUserInfo(user User) {
 	time.Sleep(time.Second)
 }
 
-// func generateUsers(count int) []User {
-// 	users := make([]User, count)
-
-// 	for i := 0; i < count; i++ {
-// 		users[i] = User{
-// 			id:    i + 1,
-// 			email: fmt.Sprintf("user%d@company.com", i+1),
-// 			logs:  generateLogs(rand.Intn(1000)),
-// 		}
-// 		fmt.Printf("generated user %d\n", i+1)
-// 		time.Sleep(time.Millisecond * 100)
-// 	}
-
-// 	return users
-// }
-
 func generateUser(id int) User {
-		user := User{
-			id:    id,
-			email: fmt.Sprintf("user%d@company.com", id),
-			logs:  generateLogs(rand.Intn(1000)),
-		}
-		fmt.Printf("generated user %d\n", id)
-		time.Sleep(time.Millisecond * 100)
-		return user
+	user := User{
+		id:    id,
+		email: fmt.Sprintf("user%d@company.com", id),
+		logs:  generateLogs(rand.Intn(1000)),
+	}
+	fmt.Printf("generated user %d\n", id)
+	time.Sleep(time.Millisecond * 100)
+	return user
 }
 
 func generateLogs(count int) []logItem {
